@@ -1,0 +1,14 @@
+{
+  "name": "allegro-order-monitor",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker for monitoring Allegro orders",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "keywords": ["cloudflare", "worker", "allegro"],
+  "author": "",
+  "license": "MIT"
+}

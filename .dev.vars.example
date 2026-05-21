@@ -1,0 +1,4 @@
+ALLEGRO_CLIENT_ID=your_client_id_here
+ALLEGRO_CLIENT_SECRET=your_client_secret_here
+ALLEGRO_REFRESH_TOKEN=your_refresh_token_here
+WEBHOOK_URL=https://hook.eu2.make.com/your_webhook_id_here
