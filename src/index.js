@@ -131,11 +131,20 @@ async function processEvents(events, env, isFirstRun) {
 	const processedIds = await getProcessedIds(env);
 	const newEvents = [];
 	
+	// Event types to process (only notify when payment is completed)
+	const NOTIFY_EVENT_TYPES = ['READY_FOR_PROCESSING'];
+	
 	for (const event of events) {
 		const eventTime = new Date(event.occurredAt).getTime();
 		
 		if (eventTime < oneDayAgo) {
 			console.log(`Skipping old event ${event.id} from ${event.occurredAt}`);
+			continue;
+		}
+		
+		// Filter by event type
+		if (!NOTIFY_EVENT_TYPES.includes(event.type)) {
+			console.log(`Skipping event ${event.id} of type ${event.type}`);
 			continue;
 		}
 		
@@ -186,7 +195,8 @@ async function sendWebhook(event, env) {
 	const response = await fetch(env.WEBHOOK_URL, {
 		method: 'POST',
 		headers: {
-			'Content-Type': 'application/json'
+			'Content-Type': 'application/json',
+			'X-Webhook-Secret': env.WEBHOOK_SECRET || 'allegro-webhook-2024'
 		},
 		body: JSON.stringify(payload)
 	});
