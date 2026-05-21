@@ -4,8 +4,31 @@ export default {
 	},
 
 	async fetch(request, env) {
+		const url = new URL(request.url);
+		
 		if (request.method === 'GET') {
 			return new Response('Allegro Order Monitor is running', { status: 200 });
+		}
+		
+		// Test endpoint to verify webhook works
+		if (url.pathname === '/test') {
+			try {
+				const testEvent = {
+					id: 'test-' + Date.now(),
+					type: 'READY_FOR_PROCESSING',
+					occurredAt: new Date().toISOString(),
+					order: {
+						id: 'test-order-123',
+						buyer: { login: 'test-buyer' },
+						totalToPay: { amount: '99.99', currency: 'PLN' }
+					}
+				};
+				
+				await sendWebhook(testEvent, env);
+				return new Response('✅ Test webhook sent successfully! Check Make.com', { status: 200 });
+			} catch (error) {
+				return new Response(`❌ Test webhook failed: ${error.message}`, { status: 500 });
+			}
 		}
 		
 		await checkAllegroOrders(env);
@@ -192,13 +215,35 @@ async function sendWebhook(event, env) {
 		order: event.order
 	};
 	
+	const payloadString = JSON.stringify(payload);
+	const headers = {
+		'Content-Type': 'application/json'
+	};
+	
+	// Add both authentication methods (Make.com will use x-make-apikey, WooCommerce uses HMAC)
+	if (env.WEBHOOK_SECRET) {
+		// Make.com API key
+		headers['x-make-apikey'] = env.WEBHOOK_SECRET;
+		
+		// WooCommerce HMAC signature (for compatibility)
+		const encoder = new TextEncoder();
+		const key = await crypto.subtle.importKey(
+			'raw',
+			encoder.encode(env.WEBHOOK_SECRET),
+			{ name: 'HMAC', hash: 'SHA-256' },
+			false,
+			['sign']
+		);
+		const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(payloadString));
+		const hashArray = Array.from(new Uint8Array(signature));
+		const hashBase64 = btoa(String.fromCharCode.apply(null, hashArray));
+		headers['X-WC-Webhook-Signature'] = hashBase64;
+	}
+	
 	const response = await fetch(env.WEBHOOK_URL, {
 		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-			'X-Webhook-Secret': env.WEBHOOK_SECRET || 'allegro-webhook-2024'
-		},
-		body: JSON.stringify(payload)
+		headers: headers,
+		body: payloadString
 	});
 	
 	if (!response.ok) {
@@ -210,23 +255,3 @@ async function sendWebhook(event, env) {
 	console.log(`✅ Webhook sent successfully for event ${event.id}`);
 }
 
-async function generateSignature(payload, secret) {
-	const encoder = new TextEncoder();
-	const key = await crypto.subtle.importKey(
-		'raw',
-		encoder.encode(secret),
-		{ name: 'HMAC', hash: 'SHA-256' },
-		false,
-		['sign']
-	);
-	
-	const signature = await crypto.subtle.sign(
-		'HMAC',
-		key,
-		encoder.encode(payload)
-	);
-	
-	return Array.from(new Uint8Array(signature))
-		.map(b => b.toString(16).padStart(2, '0'))
-		.join('');
-}
