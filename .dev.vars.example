@@ -1,0 +1,3 @@
+ALLEGRO_CLIENT_ID=your_client_id_here
+ALLEGRO_CLIENT_SECRET=your_client_secret_here
+WEBHOOK_SECRET=your_webhook_secret_here

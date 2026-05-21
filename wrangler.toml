@@ -1,0 +1,17 @@
+name = "allegro-order-monitor"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+[triggers]
+crons = ["*/3 * * * *"]
+
+[[kv_namespaces]]
+binding = "ALLEGRO_KV"
+id = "d234177b950347c8aa525dba03778d81"
+
+[vars]
+WEBHOOK_URL = "https://hook.eu2.make.com/flwj37ui7pawb3bchansppqypm3yst5b"
+
+[env.production]
+[env.production.vars]
+WEBHOOK_URL = "https://hook.eu2.make.com/flwj37ui7pawb3bchansppqypm3yst5b"
