@@ -216,7 +216,7 @@ async function getProcessedIds(env) {
 
 async function saveProcessedIds(processedIds, env) {
 	const idsArray = Array.from(processedIds);
-	const recentIds = idsArray.slice(-50);
+	const recentIds = idsArray.slice(-25);
 	await env.ALLEGRO_KV.put('processed_ids', JSON.stringify(recentIds));
 }
 
