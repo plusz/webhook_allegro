@@ -60,13 +60,22 @@ async function getAccessToken(env) {
 		return cachedToken.access_token;
 	}
 	
-	if (!env.ALLEGRO_CLIENT_ID || !env.ALLEGRO_CLIENT_SECRET || !env.ALLEGRO_REFRESH_TOKEN) {
-		throw new Error('Missing ALLEGRO_CLIENT_ID, ALLEGRO_CLIENT_SECRET, or ALLEGRO_REFRESH_TOKEN');
+	if (!env.ALLEGRO_CLIENT_ID || !env.ALLEGRO_CLIENT_SECRET) {
+		throw new Error('Missing ALLEGRO_CLIENT_ID or ALLEGRO_CLIENT_SECRET');
+	}
+	
+	// Use refresh token from KV (auto-updated) or fall back to secret
+	const kvRefreshToken = await env.ALLEGRO_KV.get('refresh_token');
+	const refreshToken = kvRefreshToken || env.ALLEGRO_REFRESH_TOKEN;
+	
+	if (!refreshToken) {
+		throw new Error('Missing ALLEGRO_REFRESH_TOKEN - run device-auth.js to authorize');
 	}
 	
 	const credentials = btoa(`${env.ALLEGRO_CLIENT_ID}:${env.ALLEGRO_CLIENT_SECRET}`);
 	
 	console.log(`Refreshing OAuth token with client ID: ${env.ALLEGRO_CLIENT_ID.substring(0, 8)}...`);
+	console.log(`Using refresh token from: ${kvRefreshToken ? 'KV storage' : 'secret'}`);
 	
 	const response = await fetch('https://allegro.pl/auth/oauth/token', {
 		method: 'POST',
@@ -74,7 +83,7 @@ async function getAccessToken(env) {
 			'Authorization': `Basic ${credentials}`,
 			'Content-Type': 'application/x-www-form-urlencoded'
 		},
-		body: `grant_type=refresh_token&refresh_token=${env.ALLEGRO_REFRESH_TOKEN}`
+		body: `grant_type=refresh_token&refresh_token=${refreshToken}`
 	});
 	
 	if (!response.ok) {
@@ -88,16 +97,20 @@ async function getAccessToken(env) {
 	console.log(`Token scope: ${data.scope}`);
 	console.log(`Token expires in: ${data.expires_in} seconds`);
 	
+	const newRefreshToken = data.refresh_token || env.ALLEGRO_REFRESH_TOKEN;
+	
 	const tokenData = {
 		access_token: data.access_token,
 		expires_at: Date.now() + (data.expires_in - 60) * 1000,
-		refresh_token: data.refresh_token || env.ALLEGRO_REFRESH_TOKEN
+		refresh_token: newRefreshToken
 	};
 	
 	await env.ALLEGRO_KV.put('access_token', JSON.stringify(tokenData));
 	
-	if (data.refresh_token && data.refresh_token !== env.ALLEGRO_REFRESH_TOKEN) {
-		console.log('⚠️ New refresh token received - consider updating ALLEGRO_REFRESH_TOKEN secret');
+	// Always save latest refresh token to KV so rotating tokens auto-update
+	if (data.refresh_token) {
+		await env.ALLEGRO_KV.put('refresh_token', data.refresh_token);
+		console.log('Refresh token updated in KV');
 	}
 	
 	console.log('OAuth token refreshed successfully');
@@ -203,7 +216,7 @@ async function getProcessedIds(env) {
 
 async function saveProcessedIds(processedIds, env) {
 	const idsArray = Array.from(processedIds);
-	const recentIds = idsArray.slice(-1000);
+	const recentIds = idsArray.slice(-50);
 	await env.ALLEGRO_KV.put('processed_ids', JSON.stringify(recentIds));
 }
 
