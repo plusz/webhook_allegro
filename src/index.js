@@ -45,6 +45,10 @@ async function checkAllegroOrders(env) {
 			await processEvents(result.events, env, result.isFirstRun);
 		} else if (result && result.cursorExpired) {
 			console.log('⚠️ Event cursor expired - resetting to latest event ID');
+		} else if (result && result.isFirstRun) {
+			// First run but no events - store a marker so we don't stay in first-run forever
+			await env.ALLEGRO_KV.put('last_event_id', 'initialized');
+			console.log('First run with no events - cursor initialized');
 		} else {
 			console.log('No new events from Allegro API');
 		}
@@ -121,10 +125,11 @@ async function getAccessToken(env) {
 
 async function fetchAllegroEvents(accessToken, env) {
 	const lastEventId = await env.ALLEGRO_KV.get('last_event_id');
-	const isFirstRun = !lastEventId;
+	const isFirstRun = !lastEventId; // true ONLY when completely new (never initialized)
+	const useLastId = lastEventId && lastEventId !== 'initialized';
 	
 	let url = 'https://api.allegro.pl/order/events';
-	if (lastEventId) {
+	if (useLastId) {
 		url += `?from=${lastEventId}`;
 	} else {
 		url += '?limit=100';
