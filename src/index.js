@@ -43,8 +43,10 @@ async function checkAllegroOrders(env) {
 		
 		if (result && result.events && result.events.length > 0) {
 			await processEvents(result.events, env, result.isFirstRun);
+		} else if (result && result.cursorExpired) {
+			console.log('⚠️ Event cursor expired - resetting to latest event ID');
 		} else {
-			console.log('No events returned from Allegro API');
+			console.log('No new events from Allegro API');
 		}
 		
 		console.log(`Checked Allegro orders at ${new Date().toISOString()}`);
@@ -144,6 +146,25 @@ async function fetchAllegroEvents(accessToken, env) {
 	
 	if (isFirstRun) {
 		console.log('First run - initializing with latest event ID only, skipping old events');
+	}
+	
+	// Detect expired cursor: had a lastEventId but got empty results
+	if (!isFirstRun && lastEventId && (!data.events || data.events.length === 0)) {
+		// Verify by fetching without cursor - if we get events, cursor has expired
+		const checkResponse = await fetch('https://api.allegro.pl/order/events?limit=1', {
+			headers: {
+				'Authorization': `Bearer ${accessToken}`,
+				'Accept': 'application/vnd.allegro.public.v1+json',
+				'User-Agent': 'webhookallegro/1.0.0 (+https://github.com/plusz/webhook_allegro)'
+			}
+		});
+		const checkData = await checkResponse.json();
+		if (checkData.events && checkData.events.length > 0) {
+			const latestId = checkData.events[0].id;
+			console.log(`⚠️ Cursor expired! Resetting from ${lastEventId} to ${latestId}`);
+			await env.ALLEGRO_KV.put('last_event_id', latestId);
+			return { events: [], isFirstRun: false, cursorExpired: true };
+		}
 	}
 	
 	return { ...data, isFirstRun };
